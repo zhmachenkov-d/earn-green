@@ -1,5 +1,5 @@
 {
-  "name": "Test Inspect",
+  "name": "EarnGreen",
   "image": "mcr.microsoft.com/devcontainers/python:3.14-trixie",
   "features": {
     "ghcr.io/devcontainers/features/node:2": {
