@@ -1,2 +1,14 @@
-# test-inspect
-Green tests can lie. AI Test Inspector makes sure they don't. Mutation testing and AST analysis for tests written by AI agents.
+# EarnGreen
+
+Green tests can lie. EarnGreen verifies that green was earned — Hollow Trust Card, Gate A, and Weekly integrity for AI-written tests (pytest beachhead).
+
+## Repo role
+
+This is the **product package** git repository (architecture AD-13): one installable `earngreen` package, CLI, and GitHub Action.
+
+Planning, BMad, and the initiative / ticket store live in the BMAD polyrepo workspace [`earn-green.specs`](https://github.com/zhmachenkov-d/earn-green.specs) (architecture AD-14). Clone that workspace with `--recurse-submodules` and start agents from its root.
+
+```text
+earn-green.specs/          # workspace + planning (start AI here)
+└── earn-green/            # this repo (submodule)
+```
