@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -33,7 +33,7 @@ def _version_callback(value: bool) -> None:
 @app.callback()
 def main(
     version: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--version",
             help="Show package version and exit.",

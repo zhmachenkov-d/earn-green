@@ -24,3 +24,14 @@ uv run earngreen --version
 ```
 
 Scaffold CLI only — `--help` and `--version`. Run smoke tests with `uv run pytest`.
+
+## Lint, format, and types
+
+Ruff and Mypy are configured in `pyproject.toml` (`[tool.ruff]`, `[tool.mypy]`). After `uv sync --group dev`:
+
+```bash
+uv run ruff check .
+uv run ruff check --fix .
+uv run ruff format .
+uv run mypy
+```
