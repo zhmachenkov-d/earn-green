@@ -12,3 +12,15 @@ Planning, BMad, and the initiative / ticket store live in the BMAD polyrepo work
 earn-green.specs/          # workspace + planning (start AI here)
 └── earn-green/            # this repo (submodule)
 ```
+
+## Install and run
+
+From this repository (or the `earn-green/` submodule in the workspace):
+
+```bash
+uv sync --group dev
+uv run earngreen --help
+uv run earngreen --version
+```
+
+Scaffold CLI only — `--help` and `--version`. Run smoke tests with `uv run pytest`.

@@ -1,0 +1,25 @@
+[project]
+name = "earngreen"
+version = "0.1.0"
+description = "EarnGreen verifies that green tests were earned — Gate A, Hollow Trust Card, Weekly integrity."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+  "typer>=0.27.0,<0.28",
+]
+
+[project.scripts]
+earngreen = "earngreen.surfaces.cli:app"
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/earngreen"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

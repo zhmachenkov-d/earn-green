@@ -1,9 +1,15 @@
 .env
+.venv/
 graphify-out/
 __pycache__/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
 
 # Planning / BMad belong in the polyrepo workspace (earn-green.specs), not here.
 _bmad/
 _bmad-output/
 .agents/
 skills-lock.json
+
