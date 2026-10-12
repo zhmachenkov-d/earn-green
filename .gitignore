@@ -1,5 +1,6 @@
 .env
 graphify-out/
+__pycache__/
 
 # Planning / BMad belong in the polyrepo workspace (earn-green.specs), not here.
 _bmad/
