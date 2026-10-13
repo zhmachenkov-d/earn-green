@@ -30,6 +30,8 @@ _REQUIRED_WIRE_KEYS: frozenset[str] = frozenset(
         "fingerprint",
     }
 )
+_OPTIONAL_WIRE_KEYS: frozenset[str] = frozenset({"detection_mode"})
+_ALLOWED_WIRE_KEYS: frozenset[str] = _REQUIRED_WIRE_KEYS | _OPTIONAL_WIRE_KEYS
 
 
 class TestType(StrEnum):
@@ -102,7 +104,7 @@ def _validate_confidence(confidence: object) -> float:
 
 
 def _validate_non_empty_str(name: str, value: object) -> str:
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value or not value.strip():
         msg = f"{name} must be a non-empty string"
         raise FindingValidationError(msg)
     if "\0" in value:
@@ -119,6 +121,11 @@ def _validate_str(name: str, value: object) -> str:
 
 
 def _parse_enum[E: StrEnum](enum_cls: type[E], name: str, value: object) -> E:
+    if isinstance(value, enum_cls):
+        return value
+    if isinstance(value, StrEnum):
+        msg = f"{name} must be {enum_cls.__name__}, got {type(value).__name__}"
+        raise FindingValidationError(msg)
     if not isinstance(value, str):
         msg = f"{name} must be a string, got {value!r}"
         raise FindingValidationError(msg)
@@ -150,10 +157,8 @@ class Finding:
 
     def __post_init__(self) -> None:
         _validate_str("why", self.why)
-        if not isinstance(self.test_type, TestType):
-            object.__setattr__(self, "test_type", _parse_enum(TestType, "test_type", self.test_type))
-        if not isinstance(self.error_type, ErrorType):
-            object.__setattr__(self, "error_type", _parse_enum(ErrorType, "error_type", self.error_type))
+        object.__setattr__(self, "test_type", _parse_enum(TestType, "test_type", self.test_type))
+        object.__setattr__(self, "error_type", _parse_enum(ErrorType, "error_type", self.error_type))
         object.__setattr__(self, "severity", _validate_severity(self.severity))
         object.__setattr__(self, "confidence", _validate_confidence(self.confidence))
         _validate_str("ai_blind_spot_prior", self.ai_blind_spot_prior)
@@ -162,7 +167,7 @@ class Finding:
         if not _is_json_int(self.schema_version) or self.schema_version != SCHEMA_VERSION_V1:
             msg = f"schema_version must be a JSON int equal to {SCHEMA_VERSION_V1}, got {self.schema_version!r}"
             raise FindingValidationError(msg)
-        if self.detection_mode is not None and not isinstance(self.detection_mode, DetectionMode):
+        if self.detection_mode is not None:
             object.__setattr__(
                 self,
                 "detection_mode",
@@ -217,6 +222,10 @@ class Finding:
         if missing:
             msg = f"Finding JSON missing required key(s): {', '.join(missing)}"
             raise FindingValidationError(msg)
+        unknown = sorted(data.keys() - _ALLOWED_WIRE_KEYS)
+        if unknown:
+            msg = f"Finding JSON unknown key(s): {', '.join(unknown)}"
+            raise FindingValidationError(msg)
 
         schema_version = data["schema_version"]
         if not _is_json_int(schema_version):
@@ -232,7 +241,7 @@ class Finding:
             raise FindingValidationError(msg)
 
         detection_mode: DetectionMode | None = None
-        if "detection_mode" in data:
+        if data.get("detection_mode") is not None:
             detection_mode = _parse_enum(DetectionMode, "detection_mode", data["detection_mode"])
 
         finding = cls(

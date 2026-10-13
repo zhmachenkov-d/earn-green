@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -62,6 +63,14 @@ def test_fingerprint_stable_across_attribute_changes() -> None:
     b = _sample_finding(why="two", severity=5, confidence=0.1)
     assert a.fingerprint == b.fingerprint
     assert a.fingerprint == compute_fingerprint(a.rule_id, a.subject_identity)
+
+
+def test_fingerprint_known_answer_sha256_nul_separator() -> None:
+    rule_id = "advisory.no_behavioral_assert"
+    subject_identity = "tests/test_x.py::test_x"
+    expected = hashlib.sha256(f"{rule_id}\0{subject_identity}".encode()).hexdigest()
+    assert compute_fingerprint(rule_id, subject_identity) == expected
+    assert _sample_finding().fingerprint == expected
 
 
 def test_fingerprint_differs_when_identity_changes() -> None:
@@ -129,6 +138,20 @@ def test_invalid_detection_mode_rejected() -> None:
         Finding.from_json(wire)
 
 
+def test_detection_mode_null_treated_as_unset() -> None:
+    wire = _sample_finding().to_wire_dict()
+    wire["detection_mode"] = None
+    restored = Finding.from_json(wire)
+    assert restored.detection_mode is None
+
+
+def test_unknown_wire_key_rejected() -> None:
+    wire = _sample_finding().to_wire_dict()
+    wire["eror_type"] = "typo"
+    with pytest.raises(FindingValidationError, match="unknown key"):
+        Finding.from_json(wire)
+
+
 def test_empty_rule_id_rejected_at_construct() -> None:
     with pytest.raises(FindingValidationError, match="rule_id"):
         _sample_finding(rule_id="")
@@ -137,6 +160,22 @@ def test_empty_rule_id_rejected_at_construct() -> None:
 def test_empty_subject_identity_rejected_at_construct() -> None:
     with pytest.raises(FindingValidationError, match="subject_identity"):
         _sample_finding(subject_identity="")
+
+
+def test_whitespace_only_identity_rejected() -> None:
+    with pytest.raises(FindingValidationError, match="rule_id"):
+        _sample_finding(rule_id="   ")
+    with pytest.raises(FindingValidationError, match="subject_identity"):
+        _sample_finding(subject_identity="\t")
+    with pytest.raises(ValueError, match="rule_id"):
+        compute_fingerprint("   ", "subject")
+    with pytest.raises(ValueError, match="subject_identity"):
+        compute_fingerprint("rule", "\t")
+
+
+def test_wrong_strenum_type_rejected_at_construct() -> None:
+    with pytest.raises(FindingValidationError, match="test_type"):
+        _sample_finding(test_type=ErrorType.UNKNOWN)
 
 
 def test_empty_rule_id_rejected_on_deserialize() -> None:
@@ -167,6 +206,22 @@ def test_severity_out_of_range_rejected() -> None:
 def test_confidence_out_of_range_rejected() -> None:
     with pytest.raises(FindingValidationError, match="confidence"):
         _sample_finding(confidence=1.5)
+
+
+def test_confidence_bool_rejected() -> None:
+    with pytest.raises(FindingValidationError, match="confidence"):
+        _sample_finding(confidence=True)
+    wire = _sample_finding().to_wire_dict()
+    wire["confidence"] = True
+    with pytest.raises(FindingValidationError, match="confidence"):
+        Finding.from_json(wire)
+
+
+def test_compute_fingerprint_non_str_rejected() -> None:
+    with pytest.raises(ValueError, match="rule_id"):
+        compute_fingerprint(1, "subject")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="subject_identity"):
+        compute_fingerprint("rule", 2)  # type: ignore[arg-type]
 
 
 def test_confidence_unknown_sentinel_accepted() -> None:
