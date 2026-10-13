@@ -1,0 +1,2 @@
+# Explicit empty includes = deny-all (distinct from missing key).
+path_include_globs: []

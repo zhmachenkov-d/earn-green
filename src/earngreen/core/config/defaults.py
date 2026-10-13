@@ -13,7 +13,9 @@ DEFAULT_PATH_EXCLUDE_GLOBS: Final[tuple[str, ...]] = (
     "**/node_modules/**",
 )
 
-DEFAULT_PATH_INCLUDE_GLOBS: Final[tuple[str, ...]] = ()
+# Missing key / fresh-install: unrestricted includes (keep all non-excluded).
+# Explicit YAML ``[]`` is deny-all and must not use this sentinel.
+DEFAULT_PATH_INCLUDE_GLOBS: Final[None] = None
 
 # Case-insensitive co-author tokens (H1).
 DEFAULT_AI_COAUTHOR_PATTERNS: Final[tuple[str, ...]] = (
@@ -26,6 +28,7 @@ DEFAULT_AI_COAUTHOR_PATTERNS: Final[tuple[str, ...]] = (
 )
 
 # Operator fills bot logins later (H2); not a starter bot list.
+# Later heuristics: ``[]`` means H2 disabled (no login signal), not a wildcard.
 DEFAULT_AI_AUTHOR_LOGINS: Final[tuple[str, ...]] = ()
 
 # Case-insensitive in-code markers (H3).

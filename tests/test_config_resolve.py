@@ -21,10 +21,10 @@ from earngreen.core.config import (
 FIXTURES = Path(__file__).parent / "fixtures" / "config"
 
 
-def test_missing_file_yields_fresh_install_defaults(tmp_path: Path) -> None:
+def test_missing_file_raises_config_error(tmp_path: Path) -> None:
     missing = tmp_path / "earngreen.yaml"
-    cfg = resolve_config(missing)
-    _assert_fresh_install_defaults(cfg)
+    with pytest.raises(ConfigError, match="config file not found"):
+        resolve_config(missing)
 
 
 def test_resolve_config_none_yields_fresh_install_defaults() -> None:
@@ -57,11 +57,18 @@ def test_zero_targets_after_path_rules_leaves_provenance_unchanged() -> None:
 
 def test_empty_provenance_knobs_do_not_empty_scan_targets() -> None:
     cfg = resolve_config(FIXTURES / "empty_provenance.yaml")
+    assert cfg.path_include_globs is None
     assert cfg.ai_coauthor_patterns == ()
     assert cfg.ai_author_logins == ()
     assert cfg.ai_marker_regex == ()
     targets = cfg.filter_scan_targets(["tests/a.py", "src/b.py"])
     assert targets == ["tests/a.py", "src/b.py"]
+
+
+def test_explicit_empty_includes_deny_all() -> None:
+    cfg = resolve_config(FIXTURES / "explicit_empty_includes.yaml")
+    assert cfg.path_include_globs == ()
+    assert cfg.filter_scan_targets(["tests/a.py", "src/b.py"]) == []
 
 
 def test_malformed_yaml_rejected(tmp_path: Path) -> None:
@@ -145,10 +152,28 @@ def test_backslashes_normalized_before_match() -> None:
     assert cfg.filter_scan_targets([r"tests\a.py"]) == ["tests/a.py"]
 
 
+def test_dot_dot_segments_collapsed_before_match() -> None:
+    cfg = resolve_config(FIXTURES / "subset_override.yaml")
+    assert cfg.filter_scan_targets(["tests/../tests/a.py", "src/./b.py"]) == ["tests/a.py"]
+
+
+def test_absolute_candidate_rejected() -> None:
+    cfg = resolve_config(None)
+    with pytest.raises(ValueError, match="repo-relative"):
+        cfg.filter_scan_targets(["/abs/tests/a.py"])
+
+
+def test_scan_mode_does_not_affect_filter() -> None:
+    cfg = resolve_config(FIXTURES / "subset_override.yaml")
+    assert cfg.scan_mode is ScanMode.FULL
+    assert cfg.filter_scan_targets(["tests/a.py", "src/b.py"]) == ["tests/a.py"]
+
+
 def _assert_fresh_install_defaults(cfg: ResolvedConfig) -> None:
     assert cfg.scan_mode is ScanMode.DIFF
     assert cfg.path_exclude_globs == DEFAULT_PATH_EXCLUDE_GLOBS
-    assert cfg.path_include_globs == DEFAULT_PATH_INCLUDE_GLOBS
+    assert cfg.path_include_globs is DEFAULT_PATH_INCLUDE_GLOBS
+    assert cfg.path_include_globs is None
     assert cfg.ai_coauthor_patterns == DEFAULT_AI_COAUTHOR_PATTERNS
     assert cfg.ai_author_logins == DEFAULT_AI_AUTHOR_LOGINS
     assert cfg.ai_author_logins == ()

@@ -48,20 +48,31 @@ class ResolvedConfig:
 
     scan_mode: ScanMode
     path_exclude_globs: tuple[str, ...]
-    path_include_globs: tuple[str, ...]
+    # None = unrestricted (key missing / fresh-install); () = explicit deny-all.
+    path_include_globs: tuple[str, ...] | None
     ai_coauthor_patterns: tuple[str, ...]
     ai_author_logins: tuple[str, ...]
     ai_marker_regex: tuple[str, ...]
 
     def filter_scan_targets(self, candidates: Sequence[str]) -> list[str]:
-        """Apply path exclude/include globs; provenance fields never affect the result."""
+        """Apply path exclude/include globs; provenance fields never affect the result.
+
+        ``scan_mode`` is ignored here (persisted only). Candidates must be
+        repo-relative POSIX paths; absolute paths raise ``ValueError``.
+        """
         kept: list[str] = []
         for raw in candidates:
             posix = _normalize_posix(raw)
             path = PurePosixPath(posix)
             if any(_path_matches(path, pattern) for pattern in self.path_exclude_globs):
                 continue
-            if self.path_include_globs and not any(_path_matches(path, pattern) for pattern in self.path_include_globs):
+            includes = self.path_include_globs
+            if includes is None:
+                kept.append(posix)
+                continue
+            if not includes:
+                continue
+            if not any(_path_matches(path, pattern) for pattern in includes):
                 continue
             kept.append(posix)
         return kept
@@ -70,13 +81,15 @@ class ResolvedConfig:
 def resolve_config(path: Path | None = None) -> ResolvedConfig:
     """Load and resolve earngreen.yaml, or return fresh-install defaults.
 
-    ``None`` or a missing file yields defaults (not an error). Callers pass the
+    ``path is None`` yields defaults (not an error). An explicit ``path`` that
+    is missing or not a readable file raises ``ConfigError``. Callers pass the
     path to ``earngreen.yaml``; this does not walk parents to discover it.
     """
     if path is None:
         return _defaults_resolved()
     if not path.exists():
-        return _defaults_resolved()
+        msg = f"config file not found: {path}"
+        raise ConfigError(msg)
     if not path.is_file():
         msg = f"config path must be a file, got {path}"
         raise ConfigError(msg)
@@ -118,37 +131,43 @@ def _resolve_from_mapping(data: Mapping[object, Any], *, source: str) -> Resolve
         if not isinstance(key, str):
             msg = f"config keys must be strings in {source}, got {key!r}"
             raise ConfigError(msg)
-    unknown = sorted(set(cast(Mapping[str, Any], data)) - _ALLOWED_KEYS)
+    typed = cast(Mapping[str, Any], data)
+    unknown = sorted(set(typed) - _ALLOWED_KEYS)
     if unknown:
         keys = ", ".join(unknown)
         msg = f"unknown config key(s) in {source}: {keys}"
         raise ConfigError(msg)
 
-    scan_mode = _parse_scan_mode(data.get("scan_mode", DEFAULT_SCAN_MODE), source=source)
+    scan_mode = _parse_scan_mode(typed.get("scan_mode", DEFAULT_SCAN_MODE), source=source)
+    if "path_include_globs" in typed:
+        path_include_globs: tuple[str, ...] | None = _parse_str_list(
+            typed["path_include_globs"],
+            key="path_include_globs",
+            source=source,
+        )
+    else:
+        path_include_globs = DEFAULT_PATH_INCLUDE_GLOBS
+
     return ResolvedConfig(
         scan_mode=scan_mode,
         path_exclude_globs=_parse_str_list(
-            data.get("path_exclude_globs", list(DEFAULT_PATH_EXCLUDE_GLOBS)),
+            typed.get("path_exclude_globs", list(DEFAULT_PATH_EXCLUDE_GLOBS)),
             key="path_exclude_globs",
             source=source,
         ),
-        path_include_globs=_parse_str_list(
-            data.get("path_include_globs", list(DEFAULT_PATH_INCLUDE_GLOBS)),
-            key="path_include_globs",
-            source=source,
-        ),
+        path_include_globs=path_include_globs,
         ai_coauthor_patterns=_parse_str_list(
-            data.get("ai_coauthor_patterns", list(DEFAULT_AI_COAUTHOR_PATTERNS)),
+            typed.get("ai_coauthor_patterns", list(DEFAULT_AI_COAUTHOR_PATTERNS)),
             key="ai_coauthor_patterns",
             source=source,
         ),
         ai_author_logins=_parse_str_list(
-            data.get("ai_author_logins", list(DEFAULT_AI_AUTHOR_LOGINS)),
+            typed.get("ai_author_logins", list(DEFAULT_AI_AUTHOR_LOGINS)),
             key="ai_author_logins",
             source=source,
         ),
         ai_marker_regex=_parse_str_list(
-            data.get("ai_marker_regex", list(DEFAULT_AI_MARKER_REGEX)),
+            typed.get("ai_marker_regex", list(DEFAULT_AI_MARKER_REGEX)),
             key="ai_marker_regex",
             source=source,
         ),
@@ -183,7 +202,28 @@ def _parse_str_list(value: object, *, key: str, source: str) -> tuple[str, ...]:
 
 
 def _normalize_posix(candidate: str) -> str:
-    return candidate.replace("\\", "/")
+    """Normalize to repo-relative POSIX; collapse ``.`` / ``..``; reject absolute."""
+    text = candidate.replace("\\", "/")
+    if text == "" or text.endswith("/"):
+        msg = f"candidate must be a non-empty repo-relative path without trailing slash, got {candidate!r}"
+        raise ValueError(msg)
+    if text.startswith("/"):
+        msg = f"candidate must be repo-relative, got absolute path {candidate!r}"
+        raise ValueError(msg)
+
+    resolved: list[str] = []
+    for part in PurePosixPath(text).parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if resolved:
+                resolved.pop()
+            continue
+        resolved.append(part)
+    if not resolved:
+        msg = f"candidate normalizes to empty path, got {candidate!r}"
+        raise ValueError(msg)
+    return "/".join(resolved)
 
 
 def _glob_match_variants(pattern: str) -> tuple[str, ...]:
