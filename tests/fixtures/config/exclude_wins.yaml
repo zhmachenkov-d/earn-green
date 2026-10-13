@@ -1,0 +1,4 @@
+# Include would match vendor paths; exclude must still drop them.
+path_include_globs:
+  - "**/vendor/**"
+  - "pkg/**"

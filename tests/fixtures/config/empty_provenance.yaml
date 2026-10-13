@@ -1,0 +1,6 @@
+# Empty H1–H3 knobs; path includes leave candidates non-empty after filter.
+scan_mode: diff
+path_include_globs: []
+ai_coauthor_patterns: []
+ai_author_logins: []
+ai_marker_regex: []
