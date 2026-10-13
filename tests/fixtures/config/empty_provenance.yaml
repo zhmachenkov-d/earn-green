@@ -1,0 +1,5 @@
+# Empty H1–H3 knobs; omit path_include_globs → unrestricted (keep all non-excluded).
+scan_mode: diff
+ai_coauthor_patterns: []
+ai_author_logins: []
+ai_marker_regex: []

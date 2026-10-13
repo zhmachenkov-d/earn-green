@@ -1,0 +1,4 @@
+# Overrides a subset of keys; unset keys keep fresh-install defaults.
+scan_mode: full
+path_include_globs:
+  - "tests/**"
