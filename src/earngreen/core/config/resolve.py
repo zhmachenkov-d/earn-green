@@ -207,8 +207,11 @@ def _normalize_posix(candidate: str) -> str:
     if text == "" or text.endswith("/"):
         msg = f"candidate must be a non-empty repo-relative path without trailing slash, got {candidate!r}"
         raise ValueError(msg)
-    # POSIX absolute, or Windows drive-qualified (e.g. C:/…, C:\… after slash normalize).
-    if text.startswith("/") or (len(text) >= 2 and text[0].isalpha() and text[1] == ":"):
+    # POSIX absolute, or Windows drive root / drive-qualified (C: or C:/…; C:\… → C:/…).
+    # Slash-less Letter:rest (e.g. C:foo) stays a legal POSIX-relative name.
+    if text.startswith("/") or (
+        len(text) >= 2 and text[0].isalpha() and text[1] == ":" and (len(text) == 2 or text[2] == "/")
+    ):
         msg = f"candidate must be repo-relative, got absolute path {candidate!r}"
         raise ValueError(msg)
 
@@ -228,12 +231,11 @@ def _normalize_posix(candidate: str) -> str:
 
 
 def _glob_match_variants(pattern: str) -> tuple[str, ...]:
-    """Expand ``**`` so zero path segments match under full-string fnmatch.
+    """Expand ``**`` so zero path segments match under segment-aware matching.
 
-    ``fnmatch.fnmatchcase`` matches the whole string (not right-anchored), but
-    raw ``**`` does not match zero segments mid-pattern (e.g. ``**/*.py`` vs
-    ``a.py``). Expansions cover leading ``**/``, mid ``/**/``, and trailing
-    ``/**`` while keeping relative patterns as repo-root prefixes.
+    Expansions cover leading ``**/``, mid ``/**/``, and trailing ``/**`` while
+    keeping relative patterns as repo-root prefixes. Pair with
+    ``_match_path_parts`` so single-star ``*`` stays segment-local.
     """
     seen: set[str] = set()
     stack = [pattern]
@@ -254,5 +256,33 @@ def _glob_match_variants(pattern: str) -> tuple[str, ...]:
 
 
 def _path_matches(path: str, pattern: str) -> bool:
-    """Full-path POSIX glob match (repo-root prefix for relative patterns)."""
-    return any(fnmatch.fnmatchcase(path, variant) for variant in _glob_match_variants(pattern))
+    """Full-path POSIX glob match (repo-root prefix for relative patterns).
+
+    ``*`` / ``?`` / ``[…]`` are segment-local (never match ``/``). ``**`` spans
+    zero or more path segments. Variants from ``_glob_match_variants`` cover
+    zero-segment ``**`` cases for expanders that leave mid-pattern ``**``.
+    """
+    path_parts = tuple(path.split("/"))
+    return any(_match_path_parts(path_parts, tuple(variant.split("/"))) for variant in _glob_match_variants(pattern))
+
+
+def _match_path_parts(path_parts: tuple[str, ...], pat_parts: tuple[str, ...]) -> bool:
+    """Match path segments to pattern segments; ``**`` spans zero or more."""
+
+    def match_at(path_i: int, pat_j: int) -> bool:
+        if pat_j == len(pat_parts):
+            return path_i == len(path_parts)
+        token = pat_parts[pat_j]
+        if token == "**":
+            # Consume zero or more path segments.
+            for k in range(path_i, len(path_parts) + 1):
+                if match_at(k, pat_j + 1):
+                    return True
+            return False
+        if path_i == len(path_parts):
+            return False
+        if fnmatch.fnmatchcase(path_parts[path_i], token):
+            return match_at(path_i + 1, pat_j + 1)
+        return False
+
+    return match_at(0, 0)

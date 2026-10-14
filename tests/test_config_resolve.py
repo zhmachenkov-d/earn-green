@@ -80,6 +80,20 @@ def test_doublestar_matches_zero_segments_mid_pattern() -> None:
     ]
 
 
+def test_single_star_does_not_span_slash() -> None:
+    """Single-star ``*`` is segment-local (unlike raw ``fnmatch`` on the full path)."""
+    cfg = resolve_config(None)
+    one_level = ResolvedConfig(
+        scan_mode=cfg.scan_mode,
+        path_exclude_globs=(),
+        path_include_globs=("src/*.py",),
+        ai_coauthor_patterns=cfg.ai_coauthor_patterns,
+        ai_author_logins=cfg.ai_author_logins,
+        ai_marker_regex=cfg.ai_marker_regex,
+    )
+    assert one_level.filter_scan_targets(["src/a.py", "src/a/b.py", "other.py"]) == ["src/a.py"]
+
+
 def test_zero_targets_after_path_rules_leaves_provenance_unchanged() -> None:
     cfg = resolve_config(FIXTURES / "zero_targets.yaml")
     assert cfg.filter_scan_targets(["src/b.py", "lib/c.py"]) == []
@@ -198,9 +212,15 @@ def test_absolute_candidate_rejected() -> None:
 
 def test_windows_drive_qualified_candidate_rejected() -> None:
     cfg = resolve_config(None)
-    for candidate in ("C:/Users/x.py", r"C:\Users\x.py"):
+    for candidate in ("C:/Users/x.py", r"C:\Users\x.py", "c:/Users/x.py", "C:"):
         with pytest.raises(ValueError, match="repo-relative"):
             cfg.filter_scan_targets([candidate])
+
+
+def test_slash_less_letter_colon_is_repo_relative() -> None:
+    """POSIX-relative ``C:foo`` must not be treated as a Windows absolute path."""
+    cfg = resolve_config(None)
+    assert cfg.filter_scan_targets(["C:foo", "C:foo/bar"]) == ["C:foo", "C:foo/bar"]
 
 
 def test_scan_mode_does_not_affect_filter() -> None:
