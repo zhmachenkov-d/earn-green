@@ -47,6 +47,39 @@ def test_non_empty_includes_keep_only_matching_candidates() -> None:
     assert cfg.filter_scan_targets(["tests/a.py", "src/b.py"]) == ["tests/a.py"]
 
 
+def test_include_prefix_is_repo_root_not_right_anchored() -> None:
+    """Relative ``tests/**`` must not match ``pkg/tests/...`` (full-path only)."""
+    cfg = resolve_config(FIXTURES / "subset_override.yaml")
+    assert cfg.filter_scan_targets(["tests/a.py", "pkg/tests/a.py", "src/b.py"]) == ["tests/a.py"]
+
+
+def test_doublestar_matches_zero_segments_mid_pattern() -> None:
+    """``**`` matches zero path segments (``**/*.py``, ``src/**/*.py``)."""
+    cfg = resolve_config(None)
+    starred = ResolvedConfig(
+        scan_mode=cfg.scan_mode,
+        path_exclude_globs=(),
+        path_include_globs=("**/*.py",),
+        ai_coauthor_patterns=cfg.ai_coauthor_patterns,
+        ai_author_logins=cfg.ai_author_logins,
+        ai_marker_regex=cfg.ai_marker_regex,
+    )
+    assert starred.filter_scan_targets(["a.py", "b/c.py", "readme.md"]) == ["a.py", "b/c.py"]
+
+    nested = ResolvedConfig(
+        scan_mode=cfg.scan_mode,
+        path_exclude_globs=(),
+        path_include_globs=("src/**/*.py",),
+        ai_coauthor_patterns=cfg.ai_coauthor_patterns,
+        ai_author_logins=cfg.ai_author_logins,
+        ai_marker_regex=cfg.ai_marker_regex,
+    )
+    assert nested.filter_scan_targets(["src/a.py", "src/b/c.py", "a.py", "lib/x.py"]) == [
+        "src/a.py",
+        "src/b/c.py",
+    ]
+
+
 def test_zero_targets_after_path_rules_leaves_provenance_unchanged() -> None:
     cfg = resolve_config(FIXTURES / "zero_targets.yaml")
     assert cfg.filter_scan_targets(["src/b.py", "lib/c.py"]) == []
@@ -161,6 +194,13 @@ def test_absolute_candidate_rejected() -> None:
     cfg = resolve_config(None)
     with pytest.raises(ValueError, match="repo-relative"):
         cfg.filter_scan_targets(["/abs/tests/a.py"])
+
+
+def test_windows_drive_qualified_candidate_rejected() -> None:
+    cfg = resolve_config(None)
+    for candidate in ("C:/Users/x.py", r"C:\Users\x.py"):
+        with pytest.raises(ValueError, match="repo-relative"):
+            cfg.filter_scan_targets([candidate])
 
 
 def test_scan_mode_does_not_affect_filter() -> None:
