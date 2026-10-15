@@ -27,13 +27,14 @@ _non_empty_identity = st.text(
 ).filter(lambda value: bool(value.strip()))
 
 _plain_str = st.text(
-    alphabet=st.characters(blacklist_categories=_NO_SURROGATES, blacklist_characters="\0"),
+    alphabet=st.characters(blacklist_categories=_NO_SURROGATES),
     max_size=64,
 )
 
 _severity = st.sampled_from([UNKNOWN_SEVERITY, *range(1, 6)])
 _confidence = st.one_of(
     st.just(UNKNOWN_CONFIDENCE),
+    st.integers(min_value=0, max_value=1),
     st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
 )
 _detection_mode = st.one_of(st.none(), st.sampled_from(list(DetectionMode)))
@@ -55,7 +56,7 @@ def test_finding_property_json_round_trip(
     test_type: FindingTestType,
     error_type: ErrorType,
     severity: int,
-    confidence: float,
+    confidence: int | float,
     ai_blind_spot_prior: str,
     rule_id: str,
     subject_identity: str,
@@ -75,4 +76,5 @@ def test_finding_property_json_round_trip(
     )
     restored = Finding.from_json(original.to_json())
     assert restored == original
+    assert Finding.from_json(original.to_wire_dict()) == original
     assert restored.fingerprint == compute_fingerprint(rule_id, subject_identity)
