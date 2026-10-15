@@ -1,0 +1,52 @@
+name: PR CI
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-dev
+      - run: uv run ruff check .
+
+  format:
+    name: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-dev
+      - run: uv run ruff format --check .
+
+  types:
+    name: types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-dev
+      - run: uv run mypy
+
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-dev
+      - run: uv run pytest
+
+  done:
+    name: done
+    if: always()
+    needs: [lint, format, types, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require lint, format, types, and tests
+        run: |
+          set -euo pipefail
+          test "${{ needs.lint.result }}" = "success"
+          test "${{ needs.format.result }}" = "success"
+          test "${{ needs.types.result }}" = "success"
+          test "${{ needs.tests.result }}" = "success"
