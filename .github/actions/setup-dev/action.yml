@@ -1,0 +1,12 @@
+name: Setup Python dev
+description: Install uv on Python 3.13 and sync the frozen dev dependency group
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v5
+      with:
+        python-version: "3.13"
+        enable-cache: true
+    - run: uv sync --frozen --group dev
+      shell: bash
